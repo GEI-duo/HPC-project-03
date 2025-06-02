@@ -45,14 +45,11 @@ void initialize_grid_kernel(
 void initialize_grid(
     double *grid,
     int nx,
-    int ny
+    int ny,
+    const dim3 gridDim,
+    const dim3 blockDim
 )
 {
-    dim3 blockDim(16, 16);
-    dim3 gridDim((ny + blockDim.x - 1) / blockDim.x, (nx + blockDim.y - 1) / blockDim.y);
-    
-    CHECK_CUDA_ERRORS;
-
     initialize_grid_kernel<<<gridDim, blockDim>>>(grid, nx, ny);
     cudaDeviceSynchronize();
 }
@@ -102,13 +99,11 @@ void solve_heat_equation(
     int nx,
     int ny,
     int steps,
-    double r
+    double r,
+    const dim3 gridDim,
+    const dim3 blockDim
 )
 {
-    dim3 blockDim(16, 16);
-    dim3 gridDim((ny + blockDim.x - 1) / blockDim.x, (nx + blockDim.y - 1) / blockDim.y);
-    CHECK_CUDA_ERRORS;
-
     for (int step = 0; step < steps; step++)
     {
         heat_kernel<<<gridDim, blockDim>>>(d_grid, d_new_grid, nx, ny, r);
@@ -210,11 +205,11 @@ void get_color(
 __global__ 
 void prepare_pixel_data(
     double* grid,
-     unsigned char* pixel_data,
-     int nx,
-     int ny,
-     int padded_row_size,
-     int padding
+    unsigned char* pixel_data,
+    int nx,
+    int ny,
+    int padded_row_size,
+    int padding
 ) 
 {
     int i = blockIdx.y * blockDim.y + threadIdx.y,
@@ -222,9 +217,11 @@ void prepare_pixel_data(
 
     if (i >= nx || j >= ny) return;
 
-    int row_index       = nx - 1 - i,
-        row_offset      = i * padded_row_size,
-        pixel_offset    = row_offset + j * 3;
+    int row_index           = nx - 1 - i,
+        row_offset          = i * padded_row_size,
+        pixel_offset        = row_offset + j * 3,
+        pixel_row_offset    = row_index * padded_row_size;
+
 
     unsigned char r, g, b;
     get_color(grid[row_index * ny + j], &r, &g, &b);
@@ -236,7 +233,7 @@ void prepare_pixel_data(
     // Only one thread per row handles padding
     if (j == 0 && padding > 0) {
         for (int p = 0; p < padding; ++p) {
-            pixel_data[row_offset + ny * 3 + p] = 0;
+            pixel_data[pixel_row_offset + ny * 3 + p] = 0;
         }
     }
 }
@@ -257,11 +254,15 @@ void write_grid(
     unsigned char* d_pixel_data;
     cudaMalloc(&d_pixel_data, total_size);
 
-    dim3 blockDim(16, 16);
-    dim3 gridDim((ny + blockDim.x - 1) / blockDim.x, (nx + blockDim.y - 1) / blockDim.y);
+    dim3 writeBlockDim(16, 16);
+    dim3 writeGridDim(
+        (ny + writeBlockDim.x - 1) / writeBlockDim.x,
+        (nx + writeBlockDim.y - 1) / writeBlockDim.y
+    );
+
     CHECK_CUDA_ERRORS;
 
-    prepare_pixel_data<<<gridDim, blockDim>>>(d_grid, d_pixel_data, nx, ny, padded_row_size, padding);
+    prepare_pixel_data<<<writeGridDim, writeBlockDim>>>(d_grid, d_pixel_data, nx, ny, padded_row_size, padding);
     cudaDeviceSynchronize();
 
     // Copy back to host
@@ -276,44 +277,61 @@ void write_grid(
 
 int main(int argc, char *argv[])
 {
-    if (argc != 4)
+    if (argc != 6)
     {
-        printf("Usage: heat_mpi <size> <steps> <name_output_file>\n");
+        printf("Usage: %s <block_x> <block_y> <size> <steps> <name_output_file>\n", argv[0]);
         return 1;
     }
     
     double r = ALPHA * DT / (DX * DY);
-    int nx, ny, steps;
+    unsigned int arg = 1;
+    int nx, ny, steps, block_x, block_y;
+    char *filename;
     float ms = 0;
     
-    nx      =
-    ny      = atoi(argv[1]),
-    steps   = atoi(argv[2]);
+    // EXECUTION CLI PARAMS
+    block_x     = atoi(argv[arg++]),
+    block_y     = atoi(argv[arg++]),
+    nx = ny     = atoi(argv[arg++]),
+    steps       = atoi(argv[arg++]),
+    filename    = argv[arg++];
     
     double *d_grid, *d_new_grid;
     cudaMalloc(&d_grid, nx * ny * sizeof(double));
     cudaMalloc(&d_new_grid, nx * ny * sizeof(double));
     
+    dim3 blockDim(block_x, block_y);
+    dim3 gridDim(
+        (ny + block_x - 1) / block_x, 
+        (nx + block_y - 1) / block_y
+    );
+    
+    CHECK_CUDA_ERRORS;
+
     // TIMING :: START
     cudaEvent_t start, stop;
     cudaEventCreate(&start);
     cudaEventCreate(&stop);
     cudaEventRecord(start);
 
-    initialize_grid(d_grid, nx, ny);
-    solve_heat_equation(d_grid, d_new_grid, nx, ny, steps, r);
+    initialize_grid(d_grid, nx, ny, gridDim, blockDim);
+    solve_heat_equation(d_grid, d_new_grid, nx, ny, steps, r, gridDim, blockDim);
 
     // TIMING :: END
     cudaEventRecord(stop);
     cudaEventSynchronize(stop);
     cudaEventElapsedTime(&ms, start, stop);
 
-    FILE *file = fopen(argv[3], "wb");
-    if (!file){ fprintf(stderr, "Failed to open output file\n");}
-    else {
+    FILE *file;
+    if ((file = fopen(filename, "wb")) != NULL) 
+    { 
         write_bmp_header(file, nx, ny);
         write_grid(file, d_grid, nx, ny);
         fclose(file);
+    }
+    else 
+    {
+        fprintf(stderr, "Failed to open output file %s\n", filename);
     }
 
     printf("Execution Time = %.3fms for %dx%d grid and %d steps\n", ms, nx, ny, steps);
