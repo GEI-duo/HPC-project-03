@@ -1,0 +1,14 @@
+\documentclass[../main.tex]{subfiles}
+
+\begin{document}
+
+\section{About GPU programming}
+
+These results have shown that the Heat Diffusion Equation is a highly scalable problem and is a good fit for GPU programming.
+
+Although this has not been our first experience with GPU programming  since we had done some tutorials on \textit{GLSL} and shaders in Unity, this project has been great to settle that knowledge outside the game engines field and to being able to directly measure the impact it has in our code execution time.
+
+From a developer experience point of view, once you get used to not having for loops and visualize how the program distributes its threads, the code feels cleaner and better to work with, which did not happen with other parallel APIs that we worked with before.
+Although OMP did not need many changes to the code, it did not make much improvements to its execution. In the other hand, MPI offered more improvement with the downside of needing to make a lot of changes to the code. CUDA feels like the best of both mentioned APIs, since it offered even better results than MPI by changing a minimal amount of code.
+
+\end{document}

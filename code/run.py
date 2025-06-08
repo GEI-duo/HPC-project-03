@@ -11,13 +11,17 @@ parser = argparse.ArgumentParser(
 
 
 parser.add_argument("-r", "--results", required=True, help="Path to the results file")
-parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose output")
+parser.add_argument(
+    "-v", "--verbose", action="store_true", help="Enable verbose output"
+)
 
 args = parser.parse_args()
+
 
 def _print(message: str) -> None:
     if args.verbose:
         print(message)
+
 
 def extract_time(output: str) -> float:
     match = re.search(r"Execution Time\s*=\s*([\d.]+)ms", output)
@@ -28,19 +32,10 @@ def extract_time(output: str) -> float:
 
 
 def main() -> None:
-
-    block_dim = [
-        (4, 256),
-        (8, 126),
-        (16, 64),
-        (32, 32),
-        (64, 16),
-        (128, 8),
-        (256, 4)
-    ]
+    block_dim = [(4, 256), (8, 126), (16, 64), (32, 32), (64, 16), (128, 8), (256, 4)]
     steps_dim = [100, 1_000, 10_000, 100_000]
     size_dim = [100, 1_000, 2_000]
-    
+
     combinations = list(product(block_dim, steps_dim, size_dim))
 
     with open(args.results, "w", newline="") as csvfile:
@@ -52,18 +47,19 @@ def main() -> None:
 
             command = [
                 "./heat_cuda",
-                str(block_x), str(block_y), str(size), str(steps), output_filename
+                str(block_x),
+                str(block_y),
+                str(size),
+                str(steps),
+                output_filename,
             ]
-            
-            _print(f"Running: {" ".join(command)}")
+
+            _print(f"Running: {' '.join(command)}")
             try:
                 result = subprocess.run(
-                    command,
-                    capture_output=True,
-                    text=True,
-                    check=True
+                    command, capture_output=True, text=True, check=True
                 )
-                
+
                 _print(result.stdout)
                 time = extract_time(result.stdout)
                 _print(f"{time}\n")

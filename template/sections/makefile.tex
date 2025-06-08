@@ -1,0 +1,11 @@
+\documentclass[../main.tex]{subfiles}
+
+\begin{document}
+
+\section{Code execution}
+
+For this assignment we were not running in the moore cluster and, this time, our execution environment had python installed, so we did a simple Makefile as in \textit{Code \ref{code:makefile}} to compile our program in `dev' or `production' (undefining the \textit{CHECK\_CUDA\_ERRORS} macro for a slight improvement) and the rest was done in python as you can see in \textit{Code \ref{code:runner}}, for a saner developer experience.
+
+This time, we did not implement a way of testing our resulting images and relied on faith and manual (visual) checking.
+
+\end{document}

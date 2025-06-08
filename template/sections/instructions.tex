@@ -1,0 +1,36 @@
+\documentclass[../main.tex]{subfiles}
+
+\begin{document}
+
+\section{CUDA API instructions}
+
+Since we had the opportunity to perform profiling, we decided to check for bottlenecks in our code. With \textit{Code \ref{code:perform-profiling}}, we execute the \textit{NSight Systems CLI} profiling and from the resulting report we get \textit{Table \ref{tab:profiling}}, where we can see two instructions that clearly are called more than the rest. This behaviour is expected since the biggest part of our program is calculating the heat equation, which is composed basically of multiple calls of \textit{cudaLaunchKernel} and \textit{cudaDeviceSynchronize}.
+
+Before, we assumed that having a lot of kernel launches would have a big impact to the performance, but instead here we can see that the \textit{cudaDeviceSynchronize} instruction is the most impactful, and takes up \textit{98.7}\% of the time from the different CUDA API calls, so we should aim to minimize these synchronizations.
+
+\begin{code}{title=Command to execute profiling,label=code:perform-profiling}{Bash}
+    $ nsys profile --stats=true --force-overwrite true -o nsys_report_b32x32_s2000_t100000 ./heat_cuda 32 32 2000 100000 ./results/out_b32x32_s2000_t100000.bmp
+\end{code}
+
+
+\begin{table}[!ht]
+    \centering
+    \begin{tabular}{|c|c|c|c|c|}
+        \hline
+        Time Percentage & Total Time & Num Calls & ... & Name \\ \hline
+        98.7 & 64384947286 & 200002 & ... & cudaDeviceSynchronize \\
+        1.2 & 762839561 & 200002 & ... & cudaLaunchKernel \\
+        0.1 & 67209822 & 3 & ... & cudaMalloc \\
+        0.0 & 5962123 & 1 & ... & cudaMemcpy \\
+        0.0 & 1194703 & 3 & ... & cudaFree \\
+        0.0 & 20415 & 2 & ... & cudaEventRecord \\
+        0.0 & 14040 & 2 & ... & cudaEventCreate \\
+        0.0 & 5699 & 2 & ... & cudaEventDestroy \\
+        0.0 & 2602 & 1 & ... & cudaEventSynchronize \\
+        0.0 & 1627 & 1 & ... & cuModuleGetLoadingMode \\ \hline
+    \end{tabular}
+    \caption{CUDA API called instructions profiling}
+    \label{tab:profiling}
+\end{table}
+
+\end{document}

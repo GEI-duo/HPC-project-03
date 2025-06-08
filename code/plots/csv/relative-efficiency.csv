@@ -1,0 +1,3 @@
+Sample,Size,Steps,Speedup,Relative Efficiency
+Smallest,100,100,0.022,368.460
+Largest,2000,100000,8.181,

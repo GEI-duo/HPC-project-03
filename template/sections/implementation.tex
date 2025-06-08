@@ -1,0 +1,42 @@
+\documentclass[../main.tex]{subfiles}
+
+\begin{document}
+
+\section{Code Implementation}
+
+In this section we will comment the changes done to adapt the \textit{C} program to \textit{CUDA}, we will go over function by function after commenting the \textit{CUDA} blocks initialization.
+
+\subsection{Initialization}
+
+First of all, we parametrized the GPU's \textit{Block X} and \textit{Block Y} to get it from the CLI as in \textit{Code \ref{code:main}}, then proceeded with the initialization of the CUDA grid, blocks, and device memory as in \textit{Code \ref{code:cuda-init}}. In this way, we will have a way to test different block sizes easily from the code execution.
+
+Now that we have initialized the dimensions of the grid and blocks, we can start the timer and the calculations. For the timer, we used CUDA events as in \textit{Code \ref{code:cuda-event}}, which calculates the elapsed time from the `start' and `stop' events in milliseconds. In this way, we're only calculating the runtime of the grid initialization and heat diffusion, and not of the writing the grid to the \textit{bmp} file, but we will comment on it later, since we also parallelized that function.
+
+\subsubsection{Function: \textit{initialize\_grid}} \label{sec:init-grid}
+
+Once the initializations are done, we will initialize the grid with the initial heat values (active diagonal). As you can see in \textit{Code \ref{code:grid-init}}, the process is simple, from the main function, we run an `orchestrator' function that is in charge of executing the parallel code and waiting for it. We run a function in the GPU with the block and grid dimensions defined earlier, and inside this function instead of using for loops, we use the running global identifiers \textit{i} and \textit{j}, for global row and column index respectively. 
+
+\subsection{Heat calculations}
+
+\subsubsection{Function: \textit{solve\_heat\_equation}}
+
+As in \textit{Section \ref{sec:init-grid}} and as we can see in \textit{Code \ref{code:heat-calculation-orchestrator}}, we call an orchestrator function that for every step manages the calculation of the new heat values, the application of boundary conditions and the swap of grid buffers.
+
+For the heat calculations as we can see in \textit{Code \ref{code:heat-calculation}}, the code changes were pretty simple compared to previous implementations with MPI or OMP, and even looks simpler than plain C/C++. The code just identifies itself, checks that it's not accessing out of bounds memory, and makes the calculation for its' assigned pixel.
+
+To apply boundary conditions, we make an interesting choice, since the grid is always of size \textit{NxN}, meaning it has same rows as columns, we can only take one of those dimensions, check if it's within the grid \textit{X} and \textit{Y} boundaries, and set to zero the top/bottom rows and left/right columns respectively.  
+
+\subsection{Output}
+
+Once the calculations are done, in order to print an output image, we need a way for getting back our results from the device memory into our CPU, but first, we don't really need the heat calculations for writing in the output, so we will make this transmission once the final pixel colors are calculated. 
+
+\subsubsection{Function: \textit{write\_grid}}
+
+As commented earlier, we did parallelize this function but did not include it in our time calculations, the reason being is that for the implementation, we needed `square' sized blocks, otherwise we did not manage to generate a correct image. For this reason, as we can see in \textit{Code \ref{code:write-grid-orchestrator}}, we used a custom block/grid size, independent from the current execution block/grid size, and also allocated a new grid for storing the pixel colors. As we also see in that code, once the pixel data is calculated, we copy it to the CPU and finally write it to the image file.
+
+\subsubsection{Function: \textit{prepare\_pixel\_data}}
+
+As commented in the \textit{write\_grid} orchestrator, we are calling this \textit{prepare\_pixel\_data} GPU function. As we can see in \textit{Code \ref{code:prepare-pixel}}, this function fills a grid of size \textit{NxNx3}, with the RGB values of each pixel. For curiosity, this function calls \textit{get\_color}, which we marked as \textit{\_\_device\_\_} meaning that it should only be called from a GPU.
+
+
+\end{document}
